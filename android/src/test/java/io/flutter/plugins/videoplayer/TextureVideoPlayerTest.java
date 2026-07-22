@@ -198,9 +198,9 @@ public final class TextureVideoPlayerTest {
     videoPlayer.recoverTextureSurface();
 
     InOrder inOrder = inOrder(mockExoPlayer, mockProducer);
-    inOrder.verify(mockExoPlayer).setVideoSurface(null);
     inOrder.verify(mockProducer).getForcedNewSurface();
     inOrder.verify(mockExoPlayer).setVideoSurface(replacementSurface);
+    verify(mockExoPlayer, never()).setVideoSurface((Surface) null);
     verify(mockExoPlayer, never()).stop();
     verify(mockExoPlayer, never()).pause();
     verify(mockExoPlayer, never()).seekTo(anyLong());

@@ -1,3 +1,8 @@
+## 2.9.5+issue184241.texture2
+
+* Avoids an intermediate null Surface while forcing a Texture Surface recovery,
+  preventing two consecutive MediaCodec output Surface switches.
+
 ## 2.9.5+issue184241.texture1
 
 * Adds an opt-in, one-time Texture Surface recovery before playback for apps

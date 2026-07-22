@@ -119,7 +119,6 @@ public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProd
   public void recoverTextureSurface() {
     // TextureVideoPlayer must always set a surfaceProducer.
     assert surfaceProducer != null;
-    exoPlayer.setVideoSurface(null);
     Surface surface = surfaceProducer.getForcedNewSurface();
     exoPlayer.setVideoSurface(surface);
     needsSurface = surface == null;
