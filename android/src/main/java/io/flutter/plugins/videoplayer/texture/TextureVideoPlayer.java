@@ -30,6 +30,7 @@ import io.flutter.view.TextureRegistry.SurfaceProducer;
 public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProducer.Callback {
   // True when the ExoPlayer instance has a null surface.
   private boolean needsSurface = true;
+
   /**
    * Creates a texture video player.
    *
@@ -89,7 +90,8 @@ public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProd
       @NonNull ExoPlayer exoPlayer, @Nullable SurfaceProducer surfaceProducer) {
     if (surfaceProducer == null) {
       throw new IllegalArgumentException(
-          "surfaceProducer cannot be null to create an ExoPlayerEventListener for TextureVideoPlayer.");
+          "surfaceProducer cannot be null to create an ExoPlayerEventListener for"
+              + " TextureVideoPlayer.");
     }
     boolean surfaceProducerHandlesCropAndRotation = surfaceProducer.handlesCropAndRotation();
     return new TextureExoPlayerEventListener(
@@ -110,6 +112,17 @@ public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProd
   public void onSurfaceCleanup() {
     exoPlayer.setVideoSurface(null);
     needsSurface = true;
+  }
+
+  /** Recreates and rebinds the Flutter texture surface without resetting playback state. */
+  @Override
+  public void recoverTextureSurface() {
+    // TextureVideoPlayer must always set a surfaceProducer.
+    assert surfaceProducer != null;
+    exoPlayer.setVideoSurface(null);
+    Surface surface = surfaceProducer.getForcedNewSurface();
+    exoPlayer.setVideoSurface(surface);
+    needsSurface = surface == null;
   }
 
   public void dispose() {

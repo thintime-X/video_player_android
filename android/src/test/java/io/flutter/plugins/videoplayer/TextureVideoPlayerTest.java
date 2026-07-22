@@ -189,6 +189,27 @@ public final class TextureVideoPlayerTest {
   }
 
   @Test
+  public void recoverTextureSurfaceReplacesAndRebindsSurface() {
+    TextureVideoPlayer videoPlayer = createVideoPlayer(new VideoPlayerOptions());
+    Surface replacementSurface = mock(Surface.class);
+    when(mockProducer.getForcedNewSurface()).thenReturn(replacementSurface);
+    clearInvocations(mockExoPlayer, mockProducer);
+
+    videoPlayer.recoverTextureSurface();
+
+    InOrder inOrder = inOrder(mockExoPlayer, mockProducer);
+    inOrder.verify(mockExoPlayer).setVideoSurface(null);
+    inOrder.verify(mockProducer).getForcedNewSurface();
+    inOrder.verify(mockExoPlayer).setVideoSurface(replacementSurface);
+    verify(mockExoPlayer, never()).stop();
+    verify(mockExoPlayer, never()).pause();
+    verify(mockExoPlayer, never()).seekTo(anyLong());
+    verify(mockEvents, never()).onInitialized(anyInt(), anyInt(), anyLong(), anyInt());
+
+    videoPlayer.dispose();
+  }
+
+  @Test
   public void disposeReleasesExoPlayerBeforeTexture() {
     VideoPlayer videoPlayer = createVideoPlayer();
 

@@ -175,6 +175,9 @@ abstract class VideoPlayerInstanceApi {
   /// Begins playback if the video is not currently playing.
   void play();
 
+  /// Recreates and rebinds the rendering surface for a texture-backed player.
+  void recoverTextureSurface();
+
   /// Pauses playback if the video is currently playing.
   void pause();
 

@@ -48,6 +48,16 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
   _videoEventStreamProvider;
 
   final Map<int, _PlayerInstance> _players = <int, _PlayerInstance>{};
+  bool _recoverTextureSurfaceOnNextPlay = false;
+
+  /// Requests a one-time texture surface recovery before the next texture
+  /// player starts playback.
+  ///
+  /// This is an opt-in workaround for Android platform views that invalidate a
+  /// video texture while dismissing a full-screen view, such as an app-open ad.
+  void requestTextureSurfaceRecoveryOnNextPlay() {
+    _recoverTextureSurfaceOnNextPlay = true;
+  }
 
   /// Registers this class as the default instance of [PathProviderPlatform].
   static void registerWith() {
@@ -166,8 +176,14 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
   }
 
   @override
-  Future<void> play(int playerId) {
-    return _playerWith(id: playerId).play();
+  Future<void> play(int playerId) async {
+    final _PlayerInstance player = _playerWith(id: playerId);
+    if (_recoverTextureSurfaceOnNextPlay &&
+        player.viewState is VideoPlayerTextureViewState) {
+      _recoverTextureSurfaceOnNextPlay = false;
+      await player.recoverTextureSurface();
+    }
+    await player.play();
   }
 
   @override
@@ -323,6 +339,10 @@ class _PlayerInstance {
 
   Future<void> play() {
     return _api.play();
+  }
+
+  Future<void> recoverTextureSurface() {
+    return _api.recoverTextureSurface();
   }
 
   Future<void> pause() {

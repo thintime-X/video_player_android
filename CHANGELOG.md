@@ -1,3 +1,8 @@
+## 2.9.5+issue184241.texture1
+
+* Adds an opt-in, one-time Texture Surface recovery before playback for apps
+  returning from full-screen Android platform views.
+
 ## 2.9.5+issue184241
 
 * Backports the Android platform view surface rebind fix from flutter/packages#11416.

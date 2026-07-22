@@ -479,6 +479,53 @@ void main() {
       await player.play(1);
 
       verify(playerApi.play());
+      verifyNever(playerApi.recoverTextureSurface());
+    });
+
+    test('requested texture surface recovery runs once before play', () async {
+      final (
+        AndroidVideoPlayer player,
+        _,
+        MockVideoPlayerInstanceApi playerApi,
+      ) = setUpMockPlayer(
+        playerId: 1,
+        textureId: 100,
+      );
+      player.requestTextureSurfaceRecoveryOnNextPlay();
+
+      await player.play(1);
+      await player.play(1);
+
+      verifyInOrder(<Object>[
+        playerApi.recoverTextureSurface(),
+        playerApi.play(),
+        playerApi.play(),
+      ]);
+      verifyNoMoreInteractions(playerApi);
+    });
+
+    test('platform view does not consume requested texture recovery', () async {
+      final platformPlayerApi = MockVideoPlayerInstanceApi();
+      final texturePlayerApi = MockVideoPlayerInstanceApi();
+      final player = AndroidVideoPlayer(
+        pluginApi: MockAndroidVideoPlayerApi(),
+        playerApiProvider: (int playerId) =>
+            playerId == 1 ? platformPlayerApi : texturePlayerApi,
+      );
+      player.ensurePlayerInitialized(1, const VideoPlayerPlatformViewState());
+      player.ensurePlayerInitialized(
+        2,
+        const VideoPlayerTextureViewState(textureId: 100),
+      );
+      player.requestTextureSurfaceRecoveryOnNextPlay();
+
+      await player.play(1);
+      await player.play(2);
+
+      verifyNever(platformPlayerApi.recoverTextureSurface());
+      verify(platformPlayerApi.play());
+      verify(texturePlayerApi.recoverTextureSurface());
+      verify(texturePlayerApi.play());
     });
 
     test('pause', () async {

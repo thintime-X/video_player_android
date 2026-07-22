@@ -842,6 +842,8 @@ interface VideoPlayerInstanceApi {
   fun setPlaybackSpeed(speed: Double)
   /** Begins playback if the video is not currently playing. */
   fun play()
+  /** Recreates and rebinds the rendering surface for a texture-backed player. */
+  fun recoverTextureSurface()
   /** Pauses playback if the video is currently playing. */
   fun pause()
   /** Seeks to the given playback position, in milliseconds. */
@@ -950,6 +952,27 @@ interface VideoPlayerInstanceApi {
             val wrapped: List<Any?> =
                 try {
                   api.play()
+                  listOf(null)
+                } catch (exception: Throwable) {
+                  MessagesPigeonUtils.wrapError(exception)
+                }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel =
+            BasicMessageChannel<Any?>(
+                binaryMessenger,
+                "dev.flutter.pigeon.video_player_android.VideoPlayerInstanceApi.recoverTextureSurface$separatedMessageChannelSuffix",
+                codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> =
+                try {
+                  api.recoverTextureSurface()
                   listOf(null)
                 } catch (exception: Throwable) {
                   MessagesPigeonUtils.wrapError(exception)

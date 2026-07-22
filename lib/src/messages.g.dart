@@ -980,6 +980,30 @@ class VideoPlayerInstanceApi {
     }
   }
 
+  /// Recreates and rebinds the rendering surface for a texture-backed player.
+  Future<void> recoverTextureSurface() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.video_player_android.VideoPlayerInstanceApi.recoverTextureSurface$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else {
+      return;
+    }
+  }
+
   /// Pauses playback if the video is currently playing.
   Future<void> pause() async {
     final pigeonVar_channelName =
