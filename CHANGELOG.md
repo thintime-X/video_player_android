@@ -1,3 +1,7 @@
+## 2.9.5+issue184241.diagnostics1
+
+* 新增 Android 播放器诊断数据采集与 PlatformView 视频画面截图能力。
+
 ## 2.9.5+issue184241
 
 * Backports the Android platform view surface rebind fix from flutter/packages#11416.

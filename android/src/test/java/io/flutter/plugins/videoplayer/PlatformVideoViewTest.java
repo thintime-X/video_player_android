@@ -119,4 +119,27 @@ public class PlatformVideoViewTest {
     verify(exoPlayer).setVideoSurface(mockSurface);
     verify(exoPlayer, never()).seekTo(anyLong());
   }
+
+  /** 创建和释放视图时会同步注册、解除对应的诊断 SurfaceView。 */
+  @Test
+  @Config(sdk = 34)
+  public void registersAndUnregistersDiagnosticSurfaceView() throws Exception {
+    final Context context = ApplicationProvider.getApplicationContext();
+    final ExoPlayer exoPlayer = mock(ExoPlayer.class);
+    final VideoPlaybackDiagnosticCollector collector =
+        mock(VideoPlaybackDiagnosticCollector.class);
+    final long playerId = 12L;
+
+    final PlatformVideoView view =
+        new PlatformVideoView(context, exoPlayer, playerId, collector);
+    final Field field = PlatformVideoView.class.getDeclaredField("surfaceView");
+    field.setAccessible(true);
+    final SurfaceView surfaceView = (SurfaceView) field.get(view);
+
+    verify(collector).registerSurfaceView(playerId, surfaceView);
+
+    view.dispose();
+
+    verify(collector).unregisterSurfaceView(playerId, surfaceView);
+  }
 }

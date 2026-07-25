@@ -13,6 +13,7 @@ import io.flutter.plugin.platform.PlatformViewFactory;
 import io.flutter.plugins.videoplayer.AndroidVideoPlayerApi;
 import io.flutter.plugins.videoplayer.PlatformVideoViewCreationParams;
 import io.flutter.plugins.videoplayer.VideoPlayer;
+import io.flutter.plugins.videoplayer.VideoPlaybackDiagnosticCollector;
 import java.util.Objects;
 
 /**
@@ -21,6 +22,7 @@ import java.util.Objects;
  */
 public class PlatformVideoViewFactory extends PlatformViewFactory {
   private final VideoPlayerProvider videoPlayerProvider;
+  @Nullable private final VideoPlaybackDiagnosticCollector diagnosticCollector;
 
   /** Functional interface for providing a VideoPlayer instance based on the player ID. */
   @FunctionalInterface
@@ -42,8 +44,16 @@ public class PlatformVideoViewFactory extends PlatformViewFactory {
    *     view.
    */
   public PlatformVideoViewFactory(@NonNull VideoPlayerProvider videoPlayerProvider) {
+    this(null, videoPlayerProvider);
+  }
+
+  /** 创建可选关联播放诊断采集器的 PlatformView 工厂。 */
+  public PlatformVideoViewFactory(
+      @Nullable VideoPlaybackDiagnosticCollector diagnosticCollector,
+      @NonNull VideoPlayerProvider videoPlayerProvider) {
     super(AndroidVideoPlayerApi.Companion.getCodec());
     this.videoPlayerProvider = videoPlayerProvider;
+    this.diagnosticCollector = diagnosticCollector;
   }
 
   /**
@@ -64,6 +74,7 @@ public class PlatformVideoViewFactory extends PlatformViewFactory {
     final VideoPlayer player = videoPlayerProvider.getVideoPlayer(playerId);
     final ExoPlayer exoPlayer = player.getExoPlayer();
 
-    return new PlatformVideoView(context, exoPlayer);
+    // TODO(复用): 为播放反馈诊断复用现有 PlatformView，补充 playerId 和 SurfaceView 注册能力。
+    return new PlatformVideoView(context, exoPlayer, playerId, diagnosticCollector);
   }
 }

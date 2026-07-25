@@ -24,6 +24,7 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
   private static final String TAG = "VideoPlayerPlugin";
   private final LongSparseArray<VideoPlayer> videoPlayers = new LongSparseArray<>();
   private FlutterState flutterState;
+  private VideoPlaybackDiagnosticCollector diagnosticCollector;
   private final VideoPlayerOptions sharedOptions = new VideoPlayerOptions();
   private long nextPlayerIdentifier = 1;
 
@@ -41,12 +42,15 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
             injector.flutterLoader()::getLookupKeyForAsset,
             binding.getTextureRegistry());
     flutterState.startListening(this, binding.getBinaryMessenger());
+    diagnosticCollector =
+        new VideoPlaybackDiagnosticCollector(
+            binding.getApplicationContext(), binding.getBinaryMessenger());
 
     binding
         .getPlatformViewRegistry()
         .registerViewFactory(
             "plugins.flutter.dev/video_player_android",
-            new PlatformVideoViewFactory(videoPlayers::get));
+            new PlatformVideoViewFactory(diagnosticCollector, videoPlayers::get));
   }
 
   @Override
@@ -55,8 +59,12 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
       Log.wtf(TAG, "Detached from the engine before registering to it.");
     }
     flutterState.stopListening(binding.getBinaryMessenger());
-    flutterState = null;
     onDestroy();
+    if (diagnosticCollector != null) {
+      diagnosticCollector.dispose();
+    }
+    diagnosticCollector = null;
+    flutterState = null;
   }
 
   private void disposeAllPlayers() {
@@ -151,8 +159,19 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
     BinaryMessenger messenger = flutterState.binaryMessenger;
     final String channelSuffix = Long.toString(id);
     VideoPlayerInstanceApi.Companion.setUp(messenger, player, channelSuffix);
+    if (diagnosticCollector != null) {
+      diagnosticCollector.registerPlayer(
+          id,
+          player.getExoPlayer(),
+          player instanceof PlatformViewVideoPlayer ? "platformView" : "textureView");
+    }
     player.setDisposeHandler(
-        () -> VideoPlayerInstanceApi.Companion.setUp(messenger, null, channelSuffix));
+        () -> {
+          if (diagnosticCollector != null) {
+            diagnosticCollector.unregisterPlayer(id);
+          }
+          VideoPlayerInstanceApi.Companion.setUp(messenger, null, channelSuffix);
+        });
 
     videoPlayers.put(id, player);
   }

@@ -72,9 +72,11 @@ public class VideoPlayerPluginTest {
   public void createsPlatformViewVideoPlayer() throws Exception {
     try (MockedStatic<PlatformViewVideoPlayer> mockedPlatformViewVideoPlayerStatic =
         mockStatic(PlatformViewVideoPlayer.class)) {
+      PlatformViewVideoPlayer player = mock(PlatformViewVideoPlayer.class);
+      when(player.getExoPlayer()).thenReturn(mock(androidx.media3.exoplayer.ExoPlayer.class));
       mockedPlatformViewVideoPlayerStatic
           .when(() -> PlatformViewVideoPlayer.create(any(), any(), any(), any()))
-          .thenReturn(mock(PlatformViewVideoPlayer.class));
+          .thenReturn(player);
 
       final CreationOptions options =
           new CreationOptions(
@@ -94,9 +96,11 @@ public class VideoPlayerPluginTest {
   public void createsTextureVideoPlayer() throws Exception {
     try (MockedStatic<TextureVideoPlayer> mockedTextureVideoPlayerStatic =
         mockStatic(TextureVideoPlayer.class)) {
+      TextureVideoPlayer player = mock(TextureVideoPlayer.class);
+      when(player.getExoPlayer()).thenReturn(mock(androidx.media3.exoplayer.ExoPlayer.class));
       mockedTextureVideoPlayerStatic
           .when(() -> TextureVideoPlayer.create(any(), any(), any(), any(), any()))
-          .thenReturn(mock(TextureVideoPlayer.class));
+          .thenReturn(player);
 
       final CreationOptions options =
           new CreationOptions(

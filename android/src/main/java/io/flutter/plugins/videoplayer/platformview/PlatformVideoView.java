@@ -4,6 +4,7 @@
 
 package io.flutter.plugins.videoplayer.platformview;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Build;
 import android.view.Surface;
@@ -11,27 +12,47 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
 import io.flutter.plugin.platform.PlatformView;
+import io.flutter.plugins.videoplayer.VideoPlaybackDiagnosticCollector;
 
 /**
  * A class used to create a native video view that can be embedded in a Flutter app. It wraps an
  * {@link ExoPlayer} instance and displays its video content.
  */
+@SuppressLint("SyntheticAccessor")
 public final class PlatformVideoView implements PlatformView {
   @NonNull private final SurfaceView surfaceView;
+  private final long playerId;
+  @Nullable private final VideoPlaybackDiagnosticCollector diagnosticCollector;
 
   /**
    * Constructs a new PlatformVideoView.
    *
    * @param context The context in which the view is running.
    * @param exoPlayer The ExoPlayer instance used to play the video.
-  */
+   */
   @OptIn(markerClass = UnstableApi.class)
   public PlatformVideoView(@NonNull Context context, @NonNull ExoPlayer exoPlayer) {
+    this(context, exoPlayer, -1L, null);
+  }
+
+  /** 创建可关联播放器诊断会话的原生视频视图。 */
+  @OptIn(markerClass = UnstableApi.class)
+  public PlatformVideoView(
+      @NonNull Context context,
+      @NonNull ExoPlayer exoPlayer,
+      long playerId,
+      @Nullable VideoPlaybackDiagnosticCollector diagnosticCollector) {
+    this.playerId = playerId;
+    this.diagnosticCollector = diagnosticCollector;
     surfaceView = new VideoSurfaceView(context, exoPlayer);
+    if (diagnosticCollector != null) {
+      diagnosticCollector.registerSurfaceView(playerId, surfaceView);
+    }
 
     setupSurfaceWithCallback(exoPlayer);
 
@@ -49,21 +70,32 @@ public final class PlatformVideoView implements PlatformView {
             new SurfaceHolder.Callback() {
               @Override
               public void surfaceCreated(@NonNull SurfaceHolder holder) {
+                recordSurfaceEvent("surfaceCreated", 0, surfaceView.getWidth(), surfaceView.getHeight());
                 bindPlayerToSurface(exoPlayer, holder.getSurface());
                 forceFirstFrameForAndroid9(exoPlayer);
               }
 
               @Override
               public void surfaceChanged(
-                  @NonNull SurfaceHolder holder, int format, int width, int height) {}
+                  @NonNull SurfaceHolder holder, int format, int width, int height) {
+                recordSurfaceEvent("surfaceChanged", format, width, height);
+              }
 
               @Override
               public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+                recordSurfaceEvent("surfaceDestroyed", 0, surfaceView.getWidth(), surfaceView.getHeight());
                 // Use clearVideoSurface to ensure we only unbind if this surface is currently
                 // active.
                 exoPlayer.clearVideoSurface(holder.getSurface());
               }
             });
+  }
+
+  /** 将 Surface 生命周期事件写入对应播放器诊断会话。 */
+  private void recordSurfaceEvent(@NonNull String event, int format, int width, int height) {
+    if (diagnosticCollector != null) {
+      diagnosticCollector.recordSurfaceEvent(playerId, event, format, width, height);
+    }
   }
 
   /** Binds the ExoPlayer to the provided surface. */
@@ -120,6 +152,12 @@ public final class PlatformVideoView implements PlatformView {
   /** Disposes of the resources used by this PlatformView. */
   @Override
   public void dispose() {
-    surfaceView.getHolder().getSurface().release();
+    if (diagnosticCollector != null) {
+      diagnosticCollector.unregisterSurfaceView(playerId, surfaceView);
+    }
+    Surface surface = surfaceView.getHolder().getSurface();
+    if (surface != null) {
+      surface.release();
+    }
   }
 }
