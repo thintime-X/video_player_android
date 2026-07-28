@@ -8,6 +8,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
@@ -16,6 +17,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.PixelCopy;
+import android.view.Surface;
 import android.view.SurfaceView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -53,7 +55,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 
-/** 采集 Android 播放器诊断数据，并按需截取 PlatformView 视频画面。 */
+/** 采集 Android 播放器诊断数据，并按需截取原生视频画面。 */
 @SuppressLint("SyntheticAccessor")
 @OptIn(markerClass = UnstableApi.class)
 public final class VideoPlaybackDiagnosticCollector implements MethodChannel.MethodCallHandler {
@@ -100,6 +102,7 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
     }
     session.exoPlayer.removeAnalyticsListener(session);
     session.surfaceView = null;
+    session.textureSurface = null;
   }
 
   /** 关联 PlatformView 的视频 SurfaceView，用于截图和尺寸诊断。 */
@@ -125,6 +128,24 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
     session.surfaceView = null;
   }
 
+  /** 关联 TextureView 使用的 Surface，用于 Texture 播放模式下的视频截图。 */
+  public synchronized void registerTextureSurface(long playerId, @NonNull Surface surface) {
+    PlayerSession session = sessions.get(playerId);
+    if (session == null) {
+      return;
+    }
+    session.registerTextureSurface(surface);
+  }
+
+  /** 仅在引用仍指向当前 Surface 时解除 Texture Surface。 */
+  public synchronized void unregisterTextureSurface(long playerId, @NonNull Surface surface) {
+    PlayerSession session = sessions.get(playerId);
+    if (session == null) {
+      return;
+    }
+    session.unregisterTextureSurface(surface);
+  }
+
   /** 记录 PlatformView 的 Surface 生命周期事件。 */
   public synchronized void recordSurfaceEvent(
       long playerId, @NonNull String event, int format, int width, int height) {
@@ -140,6 +161,7 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
     for (PlayerSession session : sessions.values()) {
       session.exoPlayer.removeAnalyticsListener(session);
       session.surfaceView = null;
+      session.textureSurface = null;
     }
     sessions.clear();
     fileExecutor.shutdown();
@@ -183,54 +205,69 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
     result.success(session.createSnapshot());
   }
 
-  /** 使用 PixelCopy 截取指定播放器的原生视频 SurfaceView。 */
+  /** 使用 PixelCopy 截取指定播放器的原生视频画面。 */
   private void handleCaptureVideoFrame(
       @NonNull MethodCall call, @NonNull MethodChannel.Result result) {
     Long playerId = readPlayerId(call);
     if (playerId == null) {
-      result.success(captureResult(false, null, "invalid_player_id", -1));
+      result.success(captureResult(false, null, "invalid_player_id", -1, null));
       return;
     }
-    SurfaceView surfaceView;
+    PlayerSession session;
     synchronized (this) {
-      PlayerSession session = sessions.get(playerId);
-      surfaceView = session == null ? null : session.surfaceView;
+      session = sessions.get(playerId);
     }
-    if (surfaceView == null) {
-      result.success(captureResult(false, null, "surface_view_unavailable", -1));
+    CaptureTarget target = session == null ? null : session.createCaptureTarget();
+    if (target == null) {
+      result.success(captureResult(false, null, "surface_unavailable", -1, null));
       return;
     }
-    int width = surfaceView.getWidth();
-    int height = surfaceView.getHeight();
-    if (width <= 0 || height <= 0 || !surfaceView.getHolder().getSurface().isValid()) {
-      result.success(captureResult(false, null, "surface_not_ready", -1));
+    if (target.width <= 0 || target.height <= 0) {
+      String errorCode =
+          "textureSurface".equals(target.sourceType) ? "texture_size_unavailable" : "surface_not_ready";
+      result.success(captureResult(false, null, errorCode, -1, target.sourceType));
+      return;
+    }
+    if (!target.surfaceValid) {
+      result.success(captureResult(false, null, "surface_not_ready", -1, target.sourceType));
       return;
     }
 
     final Bitmap bitmap;
     try {
-      bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+      bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888);
     } catch (RuntimeException | OutOfMemoryError error) {
-      result.success(captureResult(false, null, "bitmap_create_failed", -1));
+      result.success(captureResult(false, null, "bitmap_create_failed", -1, target.sourceType));
       return;
     }
 
     try {
-      PixelCopy.request(
-          surfaceView,
-          bitmap,
+      PixelCopy.OnPixelCopyFinishedListener listener =
           copyResult -> {
             if (copyResult != PixelCopy.SUCCESS) {
               bitmap.recycle();
-              result.success(captureResult(false, null, "pixel_copy_failed", copyResult));
+              result.success(
+                  captureResult(false, null, "pixel_copy_failed", copyResult, target.sourceType));
               return;
             }
-            writeCaptureFile(playerId, bitmap, copyResult, result);
-          },
-          mainHandler);
+            writeCaptureFile(playerId, bitmap, copyResult, target.sourceType, result);
+          };
+      if (target.surfaceView != null) {
+        PixelCopy.request(target.surfaceView, bitmap, listener, mainHandler);
+      } else if (target.surface != null) {
+        PixelCopy.request(
+            target.surface,
+            new Rect(0, 0, target.width, target.height),
+            bitmap,
+            listener,
+            mainHandler);
+      } else {
+        bitmap.recycle();
+        result.success(captureResult(false, null, "surface_unavailable", -1, target.sourceType));
+      }
     } catch (RuntimeException error) {
       bitmap.recycle();
-      result.success(captureResult(false, null, "pixel_copy_request_failed", -1));
+      result.success(captureResult(false, null, "pixel_copy_request_failed", -1, target.sourceType));
     }
   }
 
@@ -239,6 +276,7 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
       long playerId,
       @NonNull Bitmap bitmap,
       int pixelCopyResult,
+      @NonNull String sourceType,
       @NonNull MethodChannel.Result result) {
     try {
       fileExecutor.execute(
@@ -277,11 +315,12 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
                             finalErrorCode == null,
                             finalPath,
                             finalErrorCode,
-                            pixelCopyResult)));
+                            pixelCopyResult,
+                            sourceType)));
           });
     } catch (RejectedExecutionException error) {
       bitmap.recycle();
-      result.success(captureResult(false, null, "collector_disposed", pixelCopyResult));
+      result.success(captureResult(false, null, "collector_disposed", pixelCopyResult, sourceType));
     }
   }
 
@@ -322,13 +361,61 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
   /** 构建截图结果，避免截图问题以异常形式干扰反馈流程。 */
   @NonNull
   private static Map<String, Object> captureResult(
-      boolean success, @Nullable String path, @Nullable String errorCode, int pixelCopyResult) {
+      boolean success,
+      @Nullable String path,
+      @Nullable String errorCode,
+      int pixelCopyResult,
+      @Nullable String sourceType) {
     Map<String, Object> data = new LinkedHashMap<>();
     data.put("success", success);
     data.put("path", path);
     data.put("errorCode", errorCode);
     data.put("pixelCopyResult", pixelCopyResult);
+    data.put("sourceType", sourceType);
     return data;
+  }
+
+  /** PixelCopy 截图所需的目标 Surface 和尺寸信息。 */
+  private static final class CaptureTarget {
+    @Nullable private final SurfaceView surfaceView;
+    @Nullable private final Surface surface;
+    @NonNull private final String sourceType;
+    private final int width;
+    private final int height;
+    private final boolean surfaceValid;
+
+    /** 创建 SurfaceView 截图目标。 */
+    private static CaptureTarget fromSurfaceView(@NonNull SurfaceView surfaceView) {
+      return new CaptureTarget(
+          surfaceView,
+          null,
+          "surfaceView",
+          surfaceView.getWidth(),
+          surfaceView.getHeight(),
+          surfaceView.getHolder().getSurface().isValid());
+    }
+
+    /** 创建 Texture Surface 截图目标。 */
+    private static CaptureTarget fromTextureSurface(
+        @NonNull Surface surface, int width, int height) {
+      return new CaptureTarget(null, surface, "textureSurface", width, height, surface.isValid());
+    }
+
+    /** 保存截图目标状态。 */
+    private CaptureTarget(
+        @Nullable SurfaceView surfaceView,
+        @Nullable Surface surface,
+        @NonNull String sourceType,
+        int width,
+        int height,
+        boolean surfaceValid) {
+      this.surfaceView = surfaceView;
+      this.surface = surface;
+      this.sourceType = sourceType;
+      this.width = width;
+      this.height = height;
+      this.surfaceValid = surfaceValid;
+    }
   }
 
   /** 单个播放器的诊断会话和最近事件缓冲区。 */
@@ -340,11 +427,14 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
     @NonNull private final ArrayDeque<Map<String, Object>> recentEvents = new ArrayDeque<>();
 
     @Nullable private SurfaceView surfaceView;
+    @Nullable private Surface textureSurface;
     @Nullable private String decoderName;
     @Nullable private Format videoFormat;
     @Nullable private DecoderCounters decoderCounters;
     @Nullable private Map<String, Object> lastPlaybackError;
     @Nullable private Map<String, Object> lastCodecError;
+    private int latestSurfaceWidth;
+    private int latestSurfaceHeight;
     private int droppedVideoFrames;
     private long firstFrameElapsedRealtimeMs = -1L;
 
@@ -353,6 +443,49 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
       this.playerId = playerId;
       this.exoPlayer = exoPlayer;
       this.viewType = viewType;
+    }
+
+    /** 注册 Texture 播放器当前输出 Surface。 */
+    private synchronized void registerTextureSurface(@NonNull Surface surface) {
+      textureSurface = surface;
+      VideoSize videoSize = exoPlayer.getVideoSize();
+      Map<String, Object> detail = new LinkedHashMap<>();
+      detail.put("surfaceValid", surface.isValid());
+      detail.put("surfaceWidth", latestSurfaceWidth);
+      detail.put("surfaceHeight", latestSurfaceHeight);
+      detail.put("videoWidth", videoSize.width);
+      detail.put("videoHeight", videoSize.height);
+      recordEvent("textureSurfaceRegistered", detail);
+    }
+
+    /** 解除 Texture 播放器当前输出 Surface。 */
+    private synchronized void unregisterTextureSurface(@NonNull Surface surface) {
+      if (textureSurface != surface) {
+        return;
+      }
+      Map<String, Object> detail = new LinkedHashMap<>();
+      detail.put("surfaceValid", surface.isValid());
+      recordEvent("textureSurfaceUnregistered", detail);
+      textureSurface = null;
+    }
+
+    /** 生成当前最适合 PixelCopy 的截图目标。 */
+    @Nullable
+    private synchronized CaptureTarget createCaptureTarget() {
+      if (surfaceView != null) {
+        return CaptureTarget.fromSurfaceView(surfaceView);
+      }
+      if (textureSurface == null) {
+        return null;
+      }
+      int width = latestSurfaceWidth;
+      int height = latestSurfaceHeight;
+      if (width <= 0 || height <= 0) {
+        VideoSize videoSize = exoPlayer.getVideoSize();
+        width = videoSize.width;
+        height = videoSize.height;
+      }
+      return CaptureTarget.fromTextureSurface(textureSurface, width, height);
     }
 
     /** 生成可由 StandardMessageCodec 传递的结构化诊断数据。 */
@@ -419,6 +552,10 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
     /** 记录 Surface 生命周期与尺寸。 */
     private void recordSurfaceEvent(
         @NonNull String event, int format, int width, int height) {
+      if (width > 0 && height > 0) {
+        latestSurfaceWidth = width;
+        latestSurfaceHeight = height;
+      }
       Map<String, Object> detail = new LinkedHashMap<>();
       detail.put("format", format);
       detail.put("width", width);
@@ -552,17 +689,28 @@ public final class VideoPlaybackDiagnosticCollector implements MethodChannel.Met
       return info;
     }
 
-    /** 构建当前 SurfaceView 状态。 */
+    /** 构建当前视频输出 Surface 状态。 */
     @NonNull
     private Map<String, Object> createSurfaceInfo() {
       Map<String, Object> info = new LinkedHashMap<>();
       SurfaceView view = surfaceView;
-      info.put("available", view != null);
+      Surface texture = textureSurface;
+      info.put("available", view != null || texture != null);
+      info.put("surfaceViewAvailable", view != null);
       if (view != null) {
         info.put("width", view.getWidth());
         info.put("height", view.getHeight());
         info.put("shown", view.isShown());
         info.put("surfaceValid", view.getHolder().getSurface().isValid());
+      }
+      info.put("textureSurfaceAvailable", texture != null);
+      if (texture != null) {
+        VideoSize videoSize = exoPlayer.getVideoSize();
+        info.put("textureSurfaceValid", texture.isValid());
+        info.put("latestSurfaceWidth", latestSurfaceWidth);
+        info.put("latestSurfaceHeight", latestSurfaceHeight);
+        info.put("videoWidth", videoSize.width);
+        info.put("videoHeight", videoSize.height);
       }
       return info;
     }

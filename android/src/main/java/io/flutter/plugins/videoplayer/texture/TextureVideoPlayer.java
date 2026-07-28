@@ -15,6 +15,7 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
 import io.flutter.plugins.videoplayer.ExoPlayerEventListener;
 import io.flutter.plugins.videoplayer.VideoAsset;
+import io.flutter.plugins.videoplayer.VideoPlaybackDiagnosticCollector;
 import io.flutter.plugins.videoplayer.VideoPlayer;
 import io.flutter.plugins.videoplayer.VideoPlayerCallbacks;
 import io.flutter.plugins.videoplayer.VideoPlayerOptions;
@@ -30,6 +31,9 @@ import io.flutter.view.TextureRegistry.SurfaceProducer;
 public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProducer.Callback {
   // True when the ExoPlayer instance has a null surface.
   private boolean needsSurface = true;
+  private final long playerId;
+  @Nullable private final VideoPlaybackDiagnosticCollector diagnosticCollector;
+
   /**
    * Creates a texture video player.
    *
@@ -38,6 +42,8 @@ public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProd
    * @param surfaceProducer produces a texture to render to.
    * @param asset asset to play.
    * @param options options for playback.
+   * @param playerId player id used by diagnostics.
+   * @param diagnosticCollector optional diagnostics collector.
    * @return a video player instance.
    */
   // TODO: Migrate to stable API, see https://github.com/flutter/flutter/issues/147039.
@@ -48,12 +54,16 @@ public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProd
       @NonNull VideoPlayerCallbacks events,
       @NonNull SurfaceProducer surfaceProducer,
       @NonNull VideoAsset asset,
-      @NonNull VideoPlayerOptions options) {
+      @NonNull VideoPlayerOptions options,
+      long playerId,
+      @Nullable VideoPlaybackDiagnosticCollector diagnosticCollector) {
     return new TextureVideoPlayer(
         events,
         surfaceProducer,
         asset.getMediaItem(),
         options,
+        playerId,
+        diagnosticCollector,
         () -> {
           androidx.media3.exoplayer.trackselection.DefaultTrackSelector trackSelector =
               new androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context);
@@ -73,14 +83,26 @@ public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProd
       @NonNull SurfaceProducer surfaceProducer,
       @NonNull MediaItem mediaItem,
       @NonNull VideoPlayerOptions options,
+      long playerId,
+      @Nullable VideoPlaybackDiagnosticCollector diagnosticCollector,
       @NonNull ExoPlayerProvider exoPlayerProvider) {
     super(events, mediaItem, options, surfaceProducer, exoPlayerProvider);
+    this.playerId = playerId;
+    this.diagnosticCollector = diagnosticCollector;
 
     surfaceProducer.setCallback(this);
 
     Surface surface = surfaceProducer.getSurface();
     this.exoPlayer.setVideoSurface(surface);
     needsSurface = surface == null;
+  }
+
+  /** 注册当前 Texture Surface，供反馈流程截取视频帧。 */
+  public void registerCurrentSurfaceForDiagnostics() {
+    Surface surface = currentSurface();
+    if (surface != null && diagnosticCollector != null) {
+      diagnosticCollector.registerTextureSurface(playerId, surface);
+    }
   }
 
   @NonNull
@@ -101,23 +123,43 @@ public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProd
     if (needsSurface) {
       // TextureVideoPlayer must always set a surfaceProducer.
       assert surfaceProducer != null;
-      exoPlayer.setVideoSurface(surfaceProducer.getSurface());
+      Surface surface = surfaceProducer.getSurface();
+      exoPlayer.setVideoSurface(surface);
       needsSurface = false;
+      if (surface != null && diagnosticCollector != null) {
+        diagnosticCollector.registerTextureSurface(playerId, surface);
+      }
     }
   }
 
   @RestrictTo(RestrictTo.Scope.LIBRARY)
   public void onSurfaceCleanup() {
+    Surface surface = currentSurface();
+    if (surface != null && diagnosticCollector != null) {
+      diagnosticCollector.unregisterTextureSurface(playerId, surface);
+    }
     exoPlayer.setVideoSurface(null);
     needsSurface = true;
   }
 
   public void dispose() {
-    // Super must be called first to ensure the player is released before the surface.
+    Surface surface = currentSurface();
+    if (surface != null && diagnosticCollector != null) {
+      diagnosticCollector.unregisterTextureSurface(playerId, surface);
+    }
+    // 先释放播放器，再释放 SurfaceProducer 持有的 Surface。
     super.dispose();
 
     // TextureVideoPlayer must always set a surfaceProducer.
     assert surfaceProducer != null;
     surfaceProducer.release();
+  }
+
+  /** 获取当前 SurfaceProducer 持有的 Surface。 */
+  @Nullable
+  private Surface currentSurface() {
+    // TextureVideoPlayer must always set a surfaceProducer.
+    assert surfaceProducer != null;
+    return surfaceProducer.getSurface();
   }
 }
