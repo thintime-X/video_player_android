@@ -83,8 +83,22 @@ public abstract class ExoPlayerEventListener implements Player.Listener {
       exoPlayer.seekToDefaultPosition();
       exoPlayer.prepare();
     } else {
-      events.onError("VideoError", "Video player had error " + error, null);
+      events.onError(
+          "VideoError", "Video player had error " + formatErrorWithCauses(error), null);
     }
+  }
+
+  @NonNull
+  private static String formatErrorWithCauses(@NonNull Throwable error) {
+    final StringBuilder message = new StringBuilder(error.toString());
+    Throwable cause = error.getCause();
+    int depth = 0;
+    while (cause != null && cause != error && depth < 5) {
+      message.append("; caused by: ").append(cause);
+      cause = cause.getCause();
+      depth++;
+    }
+    return message.toString();
   }
 
   @Override

@@ -5,6 +5,9 @@
 package io.flutter.plugins.videoplayer;
 
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -102,6 +105,24 @@ public final class ExoPlayerEventListenerTest {
     verify(mockExoPlayer).seekToDefaultPosition();
     verify(mockExoPlayer).prepare();
     verifyNoInteractions(mockCallbacks);
+  }
+
+  @Test
+  public void onErrorIncludesCauseChain() {
+    RuntimeException certError =
+        new RuntimeException("Trust anchor for certification path not found.");
+    RuntimeException sslError = new RuntimeException("SSLHandshakeException", certError);
+    PlaybackException playbackException =
+        new PlaybackException(
+            "Source error", sslError, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED);
+
+    eventListener.onPlayerError(playbackException);
+
+    verify(mockCallbacks)
+        .onError(
+            eq("VideoError"),
+            contains("Trust anchor for certification path not found."),
+            isNull());
   }
 
   @Test
