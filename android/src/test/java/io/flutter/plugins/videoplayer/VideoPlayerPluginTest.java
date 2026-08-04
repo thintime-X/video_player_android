@@ -99,7 +99,8 @@ public class VideoPlayerPluginTest {
       TextureVideoPlayer player = mock(TextureVideoPlayer.class);
       when(player.getExoPlayer()).thenReturn(mock(androidx.media3.exoplayer.ExoPlayer.class));
       mockedTextureVideoPlayerStatic
-          .when(() -> TextureVideoPlayer.create(any(), any(), any(), any(), any()))
+          .when(
+              () -> TextureVideoPlayer.create(any(), any(), any(), any(), any(), anyLong(), any()))
           .thenReturn(player);
 
       final CreationOptions options =

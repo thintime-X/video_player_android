@@ -85,7 +85,7 @@ public class VideoPlaybackDiagnosticCollectorTest {
 
     Map<?, ?> capture = (Map<?, ?>) result.successValue;
     assertEquals(false, capture.get("success"));
-    assertEquals("surface_view_unavailable", capture.get("errorCode"));
+    assertEquals("surface_unavailable", capture.get("errorCode"));
   }
 
   /** 删除接口仅处理诊断缓存目录内的文件。 */
