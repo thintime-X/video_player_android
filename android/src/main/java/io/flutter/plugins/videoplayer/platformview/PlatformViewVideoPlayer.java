@@ -16,6 +16,8 @@ import io.flutter.plugins.videoplayer.VideoAsset;
 import io.flutter.plugins.videoplayer.VideoPlayer;
 import io.flutter.plugins.videoplayer.VideoPlayerCallbacks;
 import io.flutter.plugins.videoplayer.VideoPlayerOptions;
+import io.flutter.plugins.videoplayer.PlatformVideoDecoderMode;
+import io.flutter.plugins.videoplayer.VideoPlayerRenderersFactory;
 import io.flutter.view.TextureRegistry.SurfaceProducer;
 
 /**
@@ -50,7 +52,8 @@ public class PlatformViewVideoPlayer extends VideoPlayer {
       @NonNull Context context,
       @NonNull VideoPlayerCallbacks events,
       @NonNull VideoAsset asset,
-      @NonNull VideoPlayerOptions options) {
+      @NonNull VideoPlayerOptions options,
+      @NonNull PlatformVideoDecoderMode decoderMode) {
     return new PlatformViewVideoPlayer(
         events,
         asset.getMediaItem(),
@@ -59,7 +62,8 @@ public class PlatformViewVideoPlayer extends VideoPlayer {
           androidx.media3.exoplayer.trackselection.DefaultTrackSelector trackSelector =
               new androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context);
           ExoPlayer.Builder builder =
-              new ExoPlayer.Builder(context)
+              new ExoPlayer.Builder(
+                      context, new VideoPlayerRenderersFactory(context, decoderMode))
                   .setTrackSelector(trackSelector)
                   .setMediaSourceFactory(asset.getMediaSourceFactory(context));
           return builder.build();

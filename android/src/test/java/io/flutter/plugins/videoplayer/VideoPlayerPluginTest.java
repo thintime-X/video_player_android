@@ -75,7 +75,7 @@ public class VideoPlayerPluginTest {
       PlatformViewVideoPlayer player = mock(PlatformViewVideoPlayer.class);
       when(player.getExoPlayer()).thenReturn(mock(androidx.media3.exoplayer.ExoPlayer.class));
       mockedPlatformViewVideoPlayerStatic
-          .when(() -> PlatformViewVideoPlayer.create(any(), any(), any(), any()))
+          .when(() -> PlatformViewVideoPlayer.create(any(), any(), any(), any(), any()))
           .thenReturn(player);
 
       final CreationOptions options =
@@ -83,7 +83,8 @@ public class VideoPlayerPluginTest {
               "https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4",
               null,
               new HashMap<>(),
-              null);
+              null,
+              PlatformVideoDecoderMode.HARDWARE_PREFERRED);
 
       final long playerId = plugin.createForPlatformView(options);
 
@@ -100,7 +101,9 @@ public class VideoPlayerPluginTest {
       when(player.getExoPlayer()).thenReturn(mock(androidx.media3.exoplayer.ExoPlayer.class));
       mockedTextureVideoPlayerStatic
           .when(
-              () -> TextureVideoPlayer.create(any(), any(), any(), any(), any(), anyLong(), any()))
+              () ->
+                  TextureVideoPlayer.create(
+                      any(), any(), any(), any(), any(), any(), anyLong(), any()))
           .thenReturn(player);
 
       final CreationOptions options =
@@ -108,7 +111,8 @@ public class VideoPlayerPluginTest {
               "https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4",
               null,
               new HashMap<>(),
-              null);
+              null,
+              PlatformVideoDecoderMode.SOFTWARE_ONLY);
 
       final TexturePlayerIds ids = plugin.createForTextureView(options);
 

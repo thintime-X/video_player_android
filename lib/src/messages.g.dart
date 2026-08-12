@@ -39,6 +39,9 @@ bool _deepEquals(Object? a, Object? b) {
 /// Pigeon equivalent of video_platform_interface's VideoFormat.
 enum PlatformVideoFormat { dash, hls, ss }
 
+/// Android 视频解码器选择模式。
+enum PlatformVideoDecoderMode { hardwarePreferred, softwareOnly }
+
 /// Pigeon equivalent of Player's playback state.
 /// https://developer.android.com/media/media3/exoplayer/listening-to-player-events#playback-state
 enum PlatformPlaybackState { idle, buffering, ready, ended, unknown }
@@ -261,6 +264,7 @@ class CreationOptions {
     this.formatHint,
     required this.httpHeaders,
     this.userAgent,
+    required this.decoderMode,
   });
 
   String uri;
@@ -271,8 +275,10 @@ class CreationOptions {
 
   String? userAgent;
 
+  PlatformVideoDecoderMode decoderMode;
+
   List<Object?> _toList() {
-    return <Object?>[uri, formatHint, httpHeaders, userAgent];
+    return <Object?>[uri, formatHint, httpHeaders, userAgent, decoderMode];
   }
 
   Object encode() {
@@ -287,6 +293,7 @@ class CreationOptions {
       httpHeaders: (result[2] as Map<Object?, Object?>?)!
           .cast<String, String>(),
       userAgent: result[3] as String?,
+      decoderMode: result[4]! as PlatformVideoDecoderMode,
     );
   }
 
@@ -598,41 +605,44 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is PlatformVideoFormat) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    } else if (value is PlatformPlaybackState) {
+    } else if (value is PlatformVideoDecoderMode) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    } else if (value is InitializationEvent) {
+    } else if (value is PlatformPlaybackState) {
       buffer.putUint8(131);
-      writeValue(buffer, value.encode());
-    } else if (value is PlaybackStateChangeEvent) {
+      writeValue(buffer, value.index);
+    } else if (value is InitializationEvent) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    } else if (value is IsPlayingStateEvent) {
+    } else if (value is PlaybackStateChangeEvent) {
       buffer.putUint8(133);
       writeValue(buffer, value.encode());
-    } else if (value is AudioTrackChangedEvent) {
+    } else if (value is IsPlayingStateEvent) {
       buffer.putUint8(134);
       writeValue(buffer, value.encode());
-    } else if (value is PlatformVideoViewCreationParams) {
+    } else if (value is AudioTrackChangedEvent) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
-    } else if (value is CreationOptions) {
+    } else if (value is PlatformVideoViewCreationParams) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
-    } else if (value is TexturePlayerIds) {
+    } else if (value is CreationOptions) {
       buffer.putUint8(137);
       writeValue(buffer, value.encode());
-    } else if (value is PlaybackState) {
+    } else if (value is TexturePlayerIds) {
       buffer.putUint8(138);
       writeValue(buffer, value.encode());
-    } else if (value is AudioTrackMessage) {
+    } else if (value is PlaybackState) {
       buffer.putUint8(139);
       writeValue(buffer, value.encode());
-    } else if (value is ExoPlayerAudioTrackData) {
+    } else if (value is AudioTrackMessage) {
       buffer.putUint8(140);
       writeValue(buffer, value.encode());
-    } else if (value is NativeAudioTrackData) {
+    } else if (value is ExoPlayerAudioTrackData) {
       buffer.putUint8(141);
+      writeValue(buffer, value.encode());
+    } else if (value is NativeAudioTrackData) {
+      buffer.putUint8(142);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -647,28 +657,31 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : PlatformVideoFormat.values[value];
       case 130:
         final value = readValue(buffer) as int?;
-        return value == null ? null : PlatformPlaybackState.values[value];
+        return value == null ? null : PlatformVideoDecoderMode.values[value];
       case 131:
-        return InitializationEvent.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : PlatformPlaybackState.values[value];
       case 132:
-        return PlaybackStateChangeEvent.decode(readValue(buffer)!);
+        return InitializationEvent.decode(readValue(buffer)!);
       case 133:
-        return IsPlayingStateEvent.decode(readValue(buffer)!);
+        return PlaybackStateChangeEvent.decode(readValue(buffer)!);
       case 134:
-        return AudioTrackChangedEvent.decode(readValue(buffer)!);
+        return IsPlayingStateEvent.decode(readValue(buffer)!);
       case 135:
-        return PlatformVideoViewCreationParams.decode(readValue(buffer)!);
+        return AudioTrackChangedEvent.decode(readValue(buffer)!);
       case 136:
-        return CreationOptions.decode(readValue(buffer)!);
+        return PlatformVideoViewCreationParams.decode(readValue(buffer)!);
       case 137:
-        return TexturePlayerIds.decode(readValue(buffer)!);
+        return CreationOptions.decode(readValue(buffer)!);
       case 138:
-        return PlaybackState.decode(readValue(buffer)!);
+        return TexturePlayerIds.decode(readValue(buffer)!);
       case 139:
-        return AudioTrackMessage.decode(readValue(buffer)!);
+        return PlaybackState.decode(readValue(buffer)!);
       case 140:
-        return ExoPlayerAudioTrackData.decode(readValue(buffer)!);
+        return AudioTrackMessage.decode(readValue(buffer)!);
       case 141:
+        return ExoPlayerAudioTrackData.decode(readValue(buffer)!);
+      case 142:
         return NativeAudioTrackData.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);

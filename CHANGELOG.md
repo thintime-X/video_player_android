@@ -1,3 +1,10 @@
+## 2.9.5+issue184241.diagnostics2
+
+* Adds a process-local Android video decoder mode with hardware-preferred and
+  software-only playback options.
+* Keeps audio decoder selection unchanged when software-only video decoding is
+  enabled.
+
 ## 2.9.5+issue184241.diagnostics1
 
 * 新增 Android 播放器诊断数据采集与 PlatformView 视频画面截图能力。

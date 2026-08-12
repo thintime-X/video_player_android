@@ -16,6 +16,9 @@ import 'package:pigeon/pigeon.dart';
 /// Pigeon equivalent of video_platform_interface's VideoFormat.
 enum PlatformVideoFormat { dash, hls, ss }
 
+/// Android 视频解码器选择模式。
+enum PlatformVideoDecoderMode { hardwarePreferred, softwareOnly }
+
 /// Pigeon equivalent of Player's playback state.
 /// https://developer.android.com/media/media3/exoplayer/listening-to-player-events#playback-state
 enum PlatformPlaybackState { idle, buffering, ready, ended, unknown }
@@ -68,11 +71,16 @@ class PlatformVideoViewCreationParams {
 }
 
 class CreationOptions {
-  CreationOptions({required this.uri, required this.httpHeaders});
+  CreationOptions({
+    required this.uri,
+    required this.httpHeaders,
+    required this.decoderMode,
+  });
   String uri;
   PlatformVideoFormat? formatHint;
   Map<String, String> httpHeaders;
   String? userAgent;
+  PlatformVideoDecoderMode decoderMode;
 }
 
 class TexturePlayerIds {

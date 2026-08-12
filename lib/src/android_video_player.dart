@@ -11,6 +11,15 @@ import 'messages.g.dart' hide videoEvents;
 import 'messages.g.dart' as pigeon show videoEvents;
 import 'platform_view_player.dart';
 
+/// Android 视频解码器选择模式。
+enum AndroidVideoDecoderMode {
+  /// 优先使用设备硬件解码器。
+  hardwarePreferred,
+
+  /// 视频轨道只使用系统报告的软件解码器。
+  softwareOnly,
+}
+
 /// The non-test implementation of `_apiProvider`.
 VideoPlayerInstanceApi _productionApiProvider(int playerId) {
   return VideoPlayerInstanceApi(messageChannelSuffix: playerId.toString());
@@ -26,6 +35,17 @@ Stream<PlatformVideoEvent> _productionVideoEventStreamProvider(
 /// An Android implementation of [VideoPlayerPlatform] that uses the
 /// Pigeon-generated [VideoPlayerApi].
 class AndroidVideoPlayer extends VideoPlayerPlatform {
+  /// 当前 App 进程中新播放器使用的解码模式。
+  ///
+  /// 该值只保存在内存中，App 进程重启后会恢复为硬解优先。
+  static AndroidVideoDecoderMode decoderMode =
+      AndroidVideoDecoderMode.hardwarePreferred;
+
+  /// 设置当前 App 进程中新播放器使用的解码模式。
+  static void setDecoderMode(AndroidVideoDecoderMode mode) {
+    decoderMode = mode;
+  }
+
   /// Creates a new Android video player implementation instance.
   AndroidVideoPlayer({
     @visibleForTesting AndroidVideoPlayerApi? pluginApi,
@@ -114,6 +134,12 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
       httpHeaders: httpHeaders,
       userAgent: userAgent,
       formatHint: formatHint,
+      decoderMode: switch (decoderMode) {
+        AndroidVideoDecoderMode.hardwarePreferred =>
+          PlatformVideoDecoderMode.hardwarePreferred,
+        AndroidVideoDecoderMode.softwareOnly =>
+          PlatformVideoDecoderMode.softwareOnly,
+      },
     );
 
     final int playerId;

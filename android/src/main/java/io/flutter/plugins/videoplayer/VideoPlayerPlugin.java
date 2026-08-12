@@ -100,7 +100,8 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
             flutterState.applicationContext,
             VideoPlayerEventCallbacks.bindTo(flutterState.binaryMessenger, streamInstance),
             videoAsset,
-            sharedOptions);
+            sharedOptions,
+            options.getDecoderMode());
 
     registerPlayerInstance(videoPlayer, id);
     return id;
@@ -121,6 +122,7 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
             handle,
             videoAsset,
             sharedOptions,
+            options.getDecoderMode(),
             id,
             diagnosticCollector);
 
